@@ -34,6 +34,21 @@ public sealed record DynamoDbCacheOptions
     public string? ServiceUrl { get; init; }
 
     /// <summary>
+    ///     Gets a flag indicating whether the cache table should be created automatically if it doesn't exist.
+    /// </summary>
+    public bool AutoCreateCacheTable { get; init; } = false;
+
+    /// <summary>
+    ///     Gets the name of the table cache entries will be written to. Defaults to <c>distributed-cache</c>.
+    /// </summary>
+    public string CacheTableName { get; init; } = "distributed-cache";
+
+    /// <summary>
+    ///     Gets the name of the partition key attribute. Defaults to <c>pk</c>.
+    /// </summary>
+    public string PartitionKeyAttributeName { get; init; } = "pk";
+
+    /// <summary>
     ///     Gets the sliding expiration used when a cache entry does not have an explicit expiration set.
     /// </summary>
     public TimeSpan DefaultSlidingExpiration { get; init; } = TimeSpan.FromMinutes(15);
