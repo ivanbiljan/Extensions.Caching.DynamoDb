@@ -51,6 +51,11 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
             ? now.Add(options.AbsoluteExpirationRelativeToNow.Value)
             : now.Add(slidingExpiration));
 
+        if (expiresAt < DateTimeOffset.Now)
+        {
+            throw new ArgumentException("Expiration date must not be in the past", nameof(options));
+        }
+
         var cacheEntry = new DynamoDbCacheEntry
         {
             Key = key,

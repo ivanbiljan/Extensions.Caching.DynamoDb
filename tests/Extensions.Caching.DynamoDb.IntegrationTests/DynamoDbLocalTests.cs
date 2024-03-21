@@ -1,11 +1,14 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.Model;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
+using Xunit.Sdk;
 
 namespace Extensions.Caching.DynamoDb.IntegrationTests;
 
-public sealed class DynamoDbLocalTests
+public sealed class DynamoDbLocalTests : IDisposable
 {
     private const string ServiceUrl = "http://localhost:8000";
     
@@ -23,8 +26,34 @@ public sealed class DynamoDbLocalTests
         }
     );
 
+    public DynamoDbLocalTests()
+    {
+        try
+        {
+            var createTableRequest = new CreateTableRequest(
+                _options.CacheTableName,
+                [
+                    new KeySchemaElement(_options.PartitionKeyAttributeName, KeyType.HASH)
+                ]
+            )
+            {
+                AttributeDefinitions =
+                [
+                    new AttributeDefinition(_options.PartitionKeyAttributeName, ScalarAttributeType.S)
+                ],
+                ProvisionedThroughput = new ProvisionedThroughput(1024, 1024)
+            };
+
+            _dynamoDb.CreateTableAsync(createTableRequest).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
     [Fact]
-    public void ItemDoesNotExist_ReturnsNull()
+    public void Get_ItemDoesNotExist_ReturnsNull()
     {
         var cache = CreateCache();
 
@@ -34,12 +63,28 @@ public sealed class DynamoDbLocalTests
     }
 
     [Fact]
-    public void NoSlidingOrAbsoluteExpiration_InsertsSuccessfully()
+    public void Set_AbsoluteExpirationInThePast_ThrowsArgumentException()
+    {
+        var cache = CreateCache();
+
+        Assert.Throws<ArgumentException>(
+            () => cache.Set(
+                "throws",
+                RandomNumberGenerator.GetBytes(8),
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpiration = DateTimeOffset.Now.AddDays(-7)
+                }
+            )
+        );
+    }
+
+    [Fact]
+    public void Set_NoSlidingOrAbsoluteExpiration_InsertsSuccessfully()
     {
         var cache = CreateCache();
 
         var content = RandomNumberGenerator.GetBytes(64);
-
         cache.Set("exists", content, new DistributedCacheEntryOptions());
         var result = cache.Get("exists");
         
@@ -48,8 +93,31 @@ public sealed class DynamoDbLocalTests
         cache.Remove("exists");
     }
 
+    [Fact]
+    public void Remove_ItemDoesNotExist_DoesNothing()
+    {
+        var cache = CreateCache();
+
+        cache.Remove("does_not_exist");
+    }
+
     private DynamoDbCache CreateCache()
     {
         return new DynamoDbCache(new OptionsWrapper<DynamoDbCacheOptions>(_options), _dynamoDb);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            var deleteTableRequest = new DeleteTableRequest(_options.CacheTableName);
+            _dynamoDb.DeleteTableAsync(deleteTableRequest).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignored
+        }
+        
+        _dynamoDb.Dispose();
     }
 }
