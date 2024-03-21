@@ -1,5 +1,4 @@
 ﻿using Amazon;
-using Amazon.Internal;
 using Microsoft.Extensions.Options;
 
 namespace Extensions.Caching.DynamoDb;
@@ -33,6 +32,11 @@ public sealed record DynamoDbCacheOptions
     ///     Gets the endpoint DynamoDb will connect to.
     /// </summary>
     public string? ServiceUrl { get; init; }
+
+    /// <summary>
+    ///     Gets the sliding expiration used when a cache entry does not have an explicit expiration set.
+    /// </summary>
+    public TimeSpan DefaultSlidingExpiration { get; init; } = TimeSpan.FromMinutes(15);
 }
 
 internal sealed class DynamoDbCacheOptionsValidator : IValidateOptions<DynamoDbCacheOptions>
