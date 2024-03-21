@@ -44,8 +44,8 @@ internal sealed class DynamoDbCacheOptionsValidator : IValidateOptions<DynamoDbC
             failures.Add("Region must not be empty");
         }
 
-        if (!string.IsNullOrWhiteSpace(options.AccessKeyId) && string.IsNullOrWhiteSpace(options.SecretKey) ||
-            string.IsNullOrWhiteSpace(options.AccessKeyId) && !string.IsNullOrWhiteSpace(options.SecretKey))
+        if ((!string.IsNullOrWhiteSpace(options.AccessKeyId) && string.IsNullOrWhiteSpace(options.SecretKey)) ||
+            (string.IsNullOrWhiteSpace(options.AccessKeyId) && !string.IsNullOrWhiteSpace(options.SecretKey)))
         {
             failures.Add("Incomplete access key");
         }
