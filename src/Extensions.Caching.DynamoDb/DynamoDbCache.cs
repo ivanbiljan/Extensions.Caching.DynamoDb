@@ -78,7 +78,7 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
     /// <inheritdoc />
     public void Remove(string key)
     {
-        RefreshAsync(key).GetAwaiter().GetResult();
+        RemoveAsync(key).GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
