@@ -1,5 +1,5 @@
 ﻿namespace Extensions.Caching.DynamoDb;
 
-public class Class1
+public class DynamoDbCache
 {
 }
