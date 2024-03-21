@@ -20,6 +20,7 @@ public static class ServiceCollectionExtensions
     )
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
 
         services.AddOptions();
         services.Configure(options);
