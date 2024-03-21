@@ -13,7 +13,6 @@ namespace Extensions.Caching.DynamoDb;
 /// </summary>
 public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazonDynamoDB dynamoDb) : IDistributedCache
 {
-    private readonly IAmazonDynamoDB _dynamoDb = dynamoDb;
     private readonly DynamoDbCacheOptions _options = options.Value;
 
     /// <inheritdoc />
@@ -95,7 +94,7 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
         };
 
         var deleteItemRequest = new DeleteItemRequest(_options.CacheTableName, entryKey);
-        await _dynamoDb.DeleteItemAsync(deleteItemRequest, token);
+        await dynamoDb.DeleteItemAsync(deleteItemRequest, token);
     }
 
     private async Task PersistToDynamoDb(DynamoDbCacheEntry cacheEntry, CancellationToken token)
@@ -112,7 +111,7 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
             }
         };
 
-        await _dynamoDb.PutItemAsync(putItemRequest, token);
+        await dynamoDb.PutItemAsync(putItemRequest, token);
     }
 
     private async Task<DynamoDbCacheEntry?> GetAndRefreshAsync(string key, CancellationToken token)
@@ -125,7 +124,7 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
         };
 
         var getItemRequest = new GetItemRequest(_options.CacheTableName, entryKey);
-        var getItemResponse = await _dynamoDb.GetItemAsync(getItemRequest, token);
+        var getItemResponse = await dynamoDb.GetItemAsync(getItemRequest, token);
         if (!getItemResponse.IsItemSet)
         {
             return null;
