@@ -27,7 +27,7 @@ internal sealed record DynamoDbCacheEntry
 
     /// <summary>
     ///     Gets an interval that defines how long the entry can be inactive before it is removed. Sliding expiration entries
-    ///     will never exceed <see cref="AbsoluteExpiration" /> if one is set.
+    ///     will never exceed the absolute expiration if one is set.
     /// </summary>
     [JsonPropertyName("slidingExpiration")]
     public required TimeSpan? SlidingExpiration { get; init; }
