@@ -2,7 +2,6 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DocumentModel;
 using Amazon.DynamoDBv2.Model;
-using Amazon.Runtime.Internal;
 using Extensions.Caching.DynamoDb.Internal;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
@@ -14,8 +13,8 @@ namespace Extensions.Caching.DynamoDb;
 /// </summary>
 public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazonDynamoDB dynamoDb) : IDistributedCache
 {
-    private readonly DynamoDbCacheOptions _options = options.Value;
     private readonly IAmazonDynamoDB _dynamoDb = dynamoDb;
+    private readonly DynamoDbCacheOptions _options = options.Value;
 
     /// <inheritdoc />
     public byte[]? Get(string key)
@@ -27,7 +26,99 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
     public async Task<byte[]?> GetAsync(string key, CancellationToken token = new())
     {
         token.ThrowIfCancellationRequested();
-        
+
+        var cacheEntry = await GetAndRefreshAsync(key, token);
+
+        return cacheEntry?.Content;
+    }
+
+    /// <inheritdoc />
+    public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+    {
+        SetAsync(key, value, options).GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
+    public async Task SetAsync(
+        string key,
+        byte[] value,
+        DistributedCacheEntryOptions options,
+        CancellationToken token = new()
+    )
+    {
+        var now = DateTimeOffset.Now;
+        var slidingExpiration = options.SlidingExpiration ?? _options.DefaultSlidingExpiration;
+        var expiresAt = options.AbsoluteExpiration ?? (options.AbsoluteExpirationRelativeToNow.HasValue
+            ? now.Add(options.AbsoluteExpirationRelativeToNow.Value)
+            : now.Add(slidingExpiration));
+
+        var cacheEntry = new DynamoDbCacheEntry
+        {
+            Key = key,
+            Content = value,
+            ExpiresAt = expiresAt,
+            SlidingExpiration = slidingExpiration,
+            RowVersion = 0
+        };
+
+        await PersistToDynamoDb(cacheEntry, token);
+    }
+
+    /// <inheritdoc />
+    public void Refresh(string key)
+    {
+        RefreshAsync(key).GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
+    public async Task RefreshAsync(string key, CancellationToken token = new())
+    {
+        token.ThrowIfCancellationRequested();
+
+        await GetAndRefreshAsync(key, token);
+    }
+
+    /// <inheritdoc />
+    public void Remove(string key)
+    {
+        RemoveAsync(key).GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveAsync(string key, CancellationToken token = new())
+    {
+        token.ThrowIfCancellationRequested();
+
+        var entryKey = new Dictionary<string, AttributeValue>
+        {
+            [_options.PartitionKeyAttributeName] = new(key)
+        };
+
+        var deleteItemRequest = new DeleteItemRequest(_options.CacheTableName, entryKey);
+        await _dynamoDb.DeleteItemAsync(deleteItemRequest, token);
+    }
+
+    private async Task PersistToDynamoDb(DynamoDbCacheEntry cacheEntry, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+
+        var cacheEntryAsAttributeMap = Document.FromJson(JsonSerializer.Serialize(cacheEntry)).ToAttributeMap();
+        var putItemRequest = new PutItemRequest(_options.CacheTableName, cacheEntryAsAttributeMap)
+        {
+            ConditionExpression = "rowVersion = :expectedRowVersion",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                ["expectedRowVersion"] = new(cacheEntry.RowVersion.ToString())
+            }
+        };
+
+        await _dynamoDb.PutItemAsync(putItemRequest, token);
+    }
+
+    private async Task<DynamoDbCacheEntry?> GetAndRefreshAsync(string key, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+
         var entryKey = new Dictionary<string, AttributeValue>
         {
             [_options.PartitionKeyAttributeName] = new(key)
@@ -43,55 +134,32 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
         var cacheEntryAsDocument = Document.FromAttributeMap(getItemResponse.Item);
         var cacheEntry = JsonSerializer.Deserialize<DynamoDbCacheEntry>(cacheEntryAsDocument.ToJson())!;
 
-        return cacheEntry.Content;
+        await RefreshAsync(cacheEntry, token);
+
+        return cacheEntry.IsExpired() ? null : cacheEntry;
     }
 
-    /// <inheritdoc />
-    public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
-    {
-        SetAsync(key, value, options).GetAwaiter().GetResult();
-    }
-
-    /// <inheritdoc />
-    public Task SetAsync(
-        string key,
-        byte[] value,
-        DistributedCacheEntryOptions options,
-        CancellationToken token = new()
-    )
-    {
-        throw new NotImplementedException();
-    }
-
-    /// <inheritdoc />
-    public void Refresh(string key)
-    {
-        RefreshAsync(key).GetAwaiter().GetResult();
-    }
-
-    /// <inheritdoc />
-    public Task RefreshAsync(string key, CancellationToken token = new())
-    {
-        throw new NotImplementedException();
-    }
-
-    /// <inheritdoc />
-    public void Remove(string key)
-    {
-        RemoveAsync(key).GetAwaiter().GetResult();
-    }
-
-    /// <inheritdoc />
-    public async Task RemoveAsync(string key, CancellationToken token = new())
+    private async Task RefreshAsync(DynamoDbCacheEntry cacheEntry, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         
-        var entryKey = new Dictionary<string, AttributeValue>
+        if (cacheEntry is not {SlidingExpiration: not null})
         {
-            [_options.PartitionKeyAttributeName] = new(key)
-        };
+            return;
+        }
 
-        var deleteItemRequest = new DeleteItemRequest(_options.CacheTableName, entryKey);
-        await _dynamoDb.DeleteItemAsync(deleteItemRequest, token);
+        if (cacheEntry.ExpiresAt < DateTimeOffset.Now)
+        {
+            return;
+        }
+
+        cacheEntry.ExpiresAt = DateTimeOffset.Now.Add(cacheEntry.SlidingExpiration.Value);
+        try
+        {
+            await PersistToDynamoDb(cacheEntry, token);
+        }
+        catch (ConditionalCheckFailedException)
+        {
+        }
     }
 }

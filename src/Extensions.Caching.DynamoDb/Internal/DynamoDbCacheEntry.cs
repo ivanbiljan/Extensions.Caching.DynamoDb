@@ -20,10 +20,10 @@ internal sealed record DynamoDbCacheEntry
     public required byte[] Content { get; init; }
 
     /// <summary>
-    ///     Gets the absolute expiration date for this entry.
+    ///     Gets the expiration date for this entry.
     /// </summary>
     [JsonPropertyName("expiresAtUtc")]
-    public required DateTimeOffset? AbsoluteExpiration { get; init; }
+    public required DateTimeOffset? ExpiresAt { get; set; }
 
     /// <summary>
     ///     Gets an interval that defines how long the entry can be inactive before it is removed. Sliding expiration entries
@@ -33,8 +33,17 @@ internal sealed record DynamoDbCacheEntry
     public required TimeSpan? SlidingExpiration { get; init; }
 
     /// <summary>
-    ///     Gets the version number. Used for optimistic locking.
+    ///     Gets the version number acquired from a read operation. Used for optimistic locking.
     /// </summary>
     [JsonPropertyName("rowVersion")]
     public required int RowVersion { get; init; }
+
+    /// <summary>
+    ///     Returns a value indicating whether the item has expired.
+    /// </summary>
+    /// <returns><c>true</c> if the item expired, <c>false</c> otherwise.</returns>
+    public bool IsExpired()
+    {
+        return ExpiresAt >= DateTimeOffset.Now;
+    }
 }

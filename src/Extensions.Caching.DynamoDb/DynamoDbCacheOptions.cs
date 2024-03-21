@@ -34,11 +34,6 @@ public sealed record DynamoDbCacheOptions
     public string? ServiceUrl { get; init; }
 
     /// <summary>
-    ///     Gets a flag indicating whether the cache table should be created automatically if it doesn't exist.
-    /// </summary>
-    public bool AutoCreateCacheTable { get; init; } = false;
-
-    /// <summary>
     ///     Gets the name of the table cache entries will be written to. Defaults to <c>distributed-cache</c>.
     /// </summary>
     public string CacheTableName { get; init; } = "distributed-cache";
