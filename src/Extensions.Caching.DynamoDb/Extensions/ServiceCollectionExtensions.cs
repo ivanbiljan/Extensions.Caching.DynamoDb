@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Extensions.Caching.DynamoDb;
 
@@ -23,6 +24,7 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(options);
 
         services.AddOptions();
+        services.AddSingleton<IValidateOptions<DynamoDbCacheOptions>, DynamoDbCacheOptionsValidator>();
         services.Configure(options);
 
         services.AddSingleton<IDistributedCache, DynamoDbCache>();

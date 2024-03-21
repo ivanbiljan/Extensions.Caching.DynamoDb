@@ -1,4 +1,5 @@
 ﻿using Amazon;
+using Amazon.Internal;
 using Microsoft.Extensions.Options;
 
 namespace Extensions.Caching.DynamoDb;
@@ -55,14 +56,9 @@ internal sealed class DynamoDbCacheOptionsValidator : IValidateOptions<DynamoDbC
     public ValidateOptionsResult Validate(string? name, DynamoDbCacheOptions options)
     {
         var failures = new List<string>();
-        if (string.IsNullOrWhiteSpace(options.Region))
+        if (string.IsNullOrWhiteSpace(options.Region) && string.IsNullOrWhiteSpace(options.ServiceUrl))
         {
-            failures.Add("Region must not be empty");
-        }
-
-        if (RegionEndpoint.GetBySystemName(options.Region) is null)
-        {
-            failures.Add("Invalid AWS region");
+            failures.Add("Either region or service URL should be set");
         }
 
         if ((!string.IsNullOrWhiteSpace(options.AccessKeyId) && string.IsNullOrWhiteSpace(options.SecretKey)) ||
