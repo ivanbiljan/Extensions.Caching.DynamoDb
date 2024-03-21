@@ -104,10 +104,14 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
         var cacheEntryAsAttributeMap = Document.FromJson(JsonSerializer.Serialize(cacheEntry)).ToAttributeMap();
         var putItemRequest = new PutItemRequest(_options.CacheTableName, cacheEntryAsAttributeMap)
         {
-            ConditionExpression = "rowVersion = :expectedRowVersion",
+            ConditionExpression =
+                $"attribute_not_exists({_options.PartitionKeyAttributeName}) OR rowVersion = :expectedRowVersion",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
             {
-                ["expectedRowVersion"] = new(cacheEntry.RowVersion.ToString())
+                [":expectedRowVersion"] = new()
+                {
+                    N = cacheEntry.RowVersion.ToString()
+                }
             }
         };
 
@@ -157,8 +161,9 @@ public sealed class DynamoDbCache(IOptions<DynamoDbCacheOptions> options, IAmazo
         {
             await PersistToDynamoDb(cacheEntry, token);
         }
-        catch (ConditionalCheckFailedException)
+        catch (ConditionalCheckFailedException ex)
         {
+            Console.WriteLine(ex);
         }
     }
 }

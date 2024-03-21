@@ -44,6 +44,6 @@ internal sealed record DynamoDbCacheEntry
     /// <returns><c>true</c> if the item expired, <c>false</c> otherwise.</returns>
     public bool IsExpired()
     {
-        return ExpiresAt >= DateTimeOffset.Now;
+        return ExpiresAt <= DateTimeOffset.Now;
     }
 }
